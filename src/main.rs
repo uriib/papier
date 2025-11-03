@@ -355,12 +355,12 @@ impl Client {
             }
         };
 
-        let client = self;
+        let source = self.source;
         let release_source = async move {
             loop {
                 release_source_msg.recv().await;
                 tokio::time::sleep(Duration::new(10, 0)).await;
-                *client.source.lock().await = None;
+                *source.lock().await = None;
             }
         };
 
