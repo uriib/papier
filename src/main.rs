@@ -346,7 +346,7 @@ impl Client {
         let connection = connection_shared;
         let mut client = self.clone();
         let timeout = async move {
-            let mut timer = tokio::time::interval(Duration::from_hours(1));
+            let mut timer = tokio::time::interval(Duration::from_mins(15));
             timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
             loop {
                 timer.tick().await;
