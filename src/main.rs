@@ -72,35 +72,6 @@ fn cache_path() -> PathBuf {
         .join("cache")
 }
 
-impl Client {
-    fn new(release_source: Sender<()>) -> Self {
-        let cache_path = cache_path();
-        Self {
-            cache_path: Arc::new(cache_path),
-            globals: Globals::default(),
-            window: None,
-            cursor_shape_device: None,
-            source: Default::default(),
-            release_source,
-            next_fetch: Local::now(),
-        }
-    }
-    fn scale(&mut self, scale: u32, qh: &QueueHandle<Self>) {
-        let window = self.window.as_mut().unwrap();
-        {
-            let mut pixmap = window.pixmap.try_lock().unwrap();
-            if scale == pixmap.scale {
-                return;
-            }
-            window.surface.set_buffer_scale(scale as _);
-            pixmap.unmap();
-            pixmap.scale = scale;
-        }
-        window.allocate_buffer(self.globals.shm(), qh);
-        self.reload();
-    }
-}
-
 #[derive(Clone)]
 struct Window {
     surface: WlSurface,
@@ -141,7 +112,10 @@ impl Window {
         }
         self.allocate_buffer(shm, qh);
     }
-    fn allocate_buffer(&mut self, shm: &WlShm, qh: &QueueHandle<Client>) {
+    // panic: if self.pixmap.byte_size() == 0
+    fn allocate_buffer(&self, shm: &WlShm, qh: &QueueHandle<Client>) {
+        let mut pixmap = self.pixmap.try_lock().unwrap();
+
         let fd = rustix::fs::open(
             SHM_PATH,
             OFlags::CREATE | OFlags::RDWR,
@@ -149,7 +123,6 @@ impl Window {
         )
         .unwrap();
 
-        let mut pixmap = self.pixmap.try_lock().unwrap();
         rustix::fs::ftruncate(&fd, pixmap.byte_size() as _).unwrap();
         let data = unsafe {
             rustix::mm::mmap(
@@ -263,7 +236,36 @@ fn fetch(
 }
 
 impl Client {
-    fn load_cache(&mut self) -> anyhow::Result<()> {
+    fn new(release_source: Sender<()>) -> Self {
+        let cache_path = cache_path();
+        Self {
+            cache_path: Arc::new(cache_path),
+            globals: Globals::default(),
+            window: None,
+            cursor_shape_device: None,
+            source: Default::default(),
+            release_source,
+            next_fetch: Local::now(),
+        }
+    }
+    fn scale(&mut self, scale: u32, qh: &QueueHandle<Self>) {
+        let window = self.window.as_ref().unwrap();
+        let mut pixmap = window.pixmap.try_lock().unwrap();
+        if scale == pixmap.scale {
+            return;
+        }
+        window.surface.set_buffer_scale(scale as _);
+
+        pixmap.unmap();
+        pixmap.scale = scale;
+
+        if pixmap.byte_size() == 0 {
+            return;
+        }
+        window.allocate_buffer(self.globals.shm(), qh);
+        self.reload();
+    }
+    fn load_cache(&self) -> anyhow::Result<()> {
         if self.source.try_lock().unwrap().is_some() {
             return Ok(());
         }
@@ -273,7 +275,7 @@ impl Client {
         *self.source.try_lock().unwrap() = Some(img);
         Ok(())
     }
-    fn reload(&mut self) {
+    fn reload(&self) {
         let loaded = self.load_cache().ok();
         self.window
             .as_ref()
