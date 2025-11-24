@@ -86,9 +86,6 @@ impl Client {
         }
     }
     fn scale(&mut self, scale: u32, qh: &QueueHandle<Self>) {
-        if Local::now() <= self.next_fetch {
-            return;
-        }
         let window = self.window.as_mut().unwrap();
         {
             let mut pixmap = window.pixmap.try_lock().unwrap();
@@ -101,12 +98,6 @@ impl Client {
         }
         window.allocate_buffer(self.globals.shm(), qh);
         self.reload();
-        self.next_fetch = self
-            .next_fetch
-            .with_time(NaiveTime::default())
-            .unwrap()
-            .checked_add_days(Days::new(1))
-            .unwrap();
     }
 }
 
@@ -293,6 +284,9 @@ impl Client {
         }
     }
     async fn on_tick(&mut self) {
+        if Local::now() <= self.next_fetch {
+            return;
+        }
         match fetch(self.cache_path.as_ref(), 10).await {
             Ok(image) => {
                 *self.source.lock().await = Some(image);
@@ -300,6 +294,12 @@ impl Client {
             }
             Err(err) => log::error!("{err:?}"),
         };
+        self.next_fetch = self
+            .next_fetch
+            .with_time(NaiveTime::default())
+            .unwrap()
+            .checked_add_days(Days::new(1))
+            .unwrap();
     }
     fn run(mut self, mut release_source_msg: Receiver<()>) -> impl Future<Output = ()> {
         let connection = Connection::connect_to_env().unwrap();
