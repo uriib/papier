@@ -250,17 +250,19 @@ impl Client {
     }
     fn scale(&mut self, scale: u32, qh: &QueueHandle<Self>) {
         let window = self.window.as_ref().unwrap();
-        let mut pixmap = window.pixmap.try_lock().unwrap();
-        if scale == pixmap.scale {
-            return;
-        }
-        window.surface.set_buffer_scale(scale as _);
+        {
+            let mut pixmap = window.pixmap.try_lock().unwrap();
+            if scale == pixmap.scale {
+                return;
+            }
+            window.surface.set_buffer_scale(scale as _);
 
-        pixmap.unmap();
-        pixmap.scale = scale;
+            pixmap.unmap();
+            pixmap.scale = scale;
 
-        if pixmap.byte_size() == 0 {
-            return;
+            if pixmap.byte_size() == 0 {
+                return;
+            }
         }
         window.allocate_buffer(self.globals.shm(), qh);
         self.reload();
