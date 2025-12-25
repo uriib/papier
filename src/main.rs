@@ -505,9 +505,7 @@ delegate_noop!(Client: ignore WpCursorShapeDeviceV1);
 delegate_noop!(Client: ignore ZwlrLayerShellV1);
 
 macro_rules! use_globals {
-    (get_version inherit, $version:expr) => { $version };
-    (get_version $version: expr, $($dummy:expr)?) => { $version };
-    ($(@$interface: ident ($version: tt) $vis: vis $name: ident: $type: ty),* $(,)?) => {
+    ($(@$interface: ident $vis: vis $name: ident: $type: ty),* $(,)?) => {
         #[derive(Default, Clone)]
         struct Globals {
             $($name: Option<$type>),*
@@ -518,7 +516,7 @@ macro_rules! use_globals {
                 registry: &WlRegistry,
                 name: u32,
                 interface: &str,
-                version: u32,
+                _: u32,
                 qhandle: &wayland_client::QueueHandle<T>,
             ) -> bool
             where
@@ -526,7 +524,7 @@ macro_rules! use_globals {
             {
                 match interface {
                     $(stringify!($interface) => {
-                        self.$name = Some(registry.bind(name, use_globals!(get_version $version, version), qhandle, ()));
+                        self.$name = Some(registry.bind(name, <$type as wayland_client::Proxy>::interface().version, qhandle, ()));
                         true
                     })*
                     _ => false,
@@ -541,16 +539,16 @@ macro_rules! use_globals {
 }
 
 use_globals! {
-    @wl_compositor(inherit)
+    @wl_compositor
     compositor: WlCompositor,
 
-    @wl_shm(inherit)
+    @wl_shm
     shm: WlShm,
 
-    @zwlr_layer_shell_v1(inherit)
+    @zwlr_layer_shell_v1
     layer_shell_v1: ZwlrLayerShellV1,
 
-    @wp_cursor_shape_manager_v1(inherit)
+    @wp_cursor_shape_manager_v1
     cursor_shaper_manager: WpCursorShapeManagerV1,
 }
 
